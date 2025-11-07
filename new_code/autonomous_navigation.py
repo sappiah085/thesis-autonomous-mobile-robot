@@ -11,7 +11,7 @@ from .motorController import MotorController
 from .robotState import RobotState
 from .occupancyGrid import OccupancyGrid
 from .fuzzyLogic import FuzzyController
-from .dwa import DWAPlanner
+# from .dwa import DWAPlanner
 from .draw_map import initializeMap, drawMap
 import numpy as np
 
@@ -30,7 +30,7 @@ class AutonomousRobot:
         self.state = RobotState(0.0, 0.0, 0.0)
         self.occupancy_grid = OccupancyGrid(cfg)
         self.fuzzy = FuzzyController(cfg)
-        self.planner = DWAPlanner(cfg, self.fuzzy)
+        # self.planner = DWAPlanner(cfg, self.fuzzy)
         self._running = False
         print("✓ Autonomous robot initialized")
         print(f"  Goal: ({goal_x:.2f}, {goal_y:.2f})")
@@ -70,22 +70,22 @@ class AutonomousRobot:
             )
 
             # Plan motion
-            v_cmd, w_cmd = self.planner.plan(
-                self.state.x, self.state.y, self.state.theta,
-                self.state.v, self.state.w,
-                self.goal[0], self.goal[1],
-                self.occupancy_grid, ranges
-            )
+            # v_cmd, w_cmd = self.planner.plan(
+            #     self.state.x, self.state.y, self.state.theta,
+            #     self.state.v, self.state.w,
+            #     self.goal[0], self.goal[1],
+            #     self.occupancy_grid, ranges
+            # )
 
             # Convert to wheel speeds (differential drive)
             # left_speed, right_speed = self._velocities_to_wheels(v_cmd, w_cmd)
-            self.motors.set_motor_speed(v_cmd, w_cmd)
+            # self.motors.set_motor_speed(v_cmd, w_cmd)
 
             # Send commands to motors
             # self.motors.set_wheel_speeds(left_speed, right_speed)
 
             # Update state (odometry)
-            self.state.update_odometry(v_cmd, w_cmd, self.cfg.dt)
+            # self.state.update_odometry(v_cmd, w_cmd, self.cfg.dt)
              # Clear axes
             self.ax1.clear()
             self.ax2.clear()
@@ -114,9 +114,9 @@ class AutonomousRobot:
             # Status logging
             if step % 10 == 0:
                 min_obs = np.min(ranges) if len(ranges) > 0 else 5.0
-                print(f"Step {step}: Pos=({self.state.x:.2f}, {self.state.y:.2f}), "
-                      f"Goal={goal_dist:.2f}m, MinObs={min_obs:.2f}m, "
-                      f"v={v_cmd:.2f}, w={w_cmd:.2f}")
+                # print(f"Step {step}: Pos=({self.state.x:.2f}, {self.state.y:.2f}), "
+                #       f"Goal={goal_dist:.2f}m, MinObs={min_obs:.2f}m, "
+                #       f"v={v_cmd:.2f}, w={w_cmd:.2f}")
 
             # Maintain control frequency
             elapsed = time.time() - loop_start
