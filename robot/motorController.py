@@ -3,7 +3,7 @@
 # ============================================================================
 from typing import Tuple
 import lgpio
-from .configuration import RobotConfig
+from .config import RobotConfig
 import time
 import math
 

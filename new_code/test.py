@@ -78,9 +78,9 @@ def test_motors():
     handle = setup_motors()
     print("Starting motor test...")
     try:
-        # forward(handle, DESIRED_SPEED)
-        # time.sleep(1)
-        turn_angle(handle, -25)
+        forward(handle, DESIRED_SPEED)
+        time.sleep(1)
+        # turn_angle(handle, -25)
         # forward(handle, DESIRED_SPEED)
         # time.sleep(1)
         print("Stop")
