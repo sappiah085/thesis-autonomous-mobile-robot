@@ -13,7 +13,7 @@ class RobotConfig:
     max_angular_speed: float = math.pi/4  # rad/s
 
     # Control parameters
-    dt: float = 1 # time step (seconds)
+    dt: float = 0.1 # time step (seconds)
     goal_tolerance: float = 0.3  # meters
     max_steps: int = 1000
 
@@ -22,8 +22,8 @@ class RobotConfig:
     min_obstacle_distance: float = 0.3  # meters
 
     # Occupancy grid parameters
-    grid_resolution: float = 0.1  # meters per cell
-    grid_size: float = 20.0  # meters (total map size)
+    grid_resolution: float = 0.05 # meters per cell
+    grid_size: float = 8 # meters (total map size)
 
     # DWA parameters (from research paper)
     v_samples: int = 10  # velocity samples
@@ -46,4 +46,4 @@ class RobotConfig:
     # Motor pins (L293D)
     motor_left_pins: Tuple[int, int, int] = (16, 25, 12)   # IN1, IN2, EN1
     motor_right_pins: Tuple[int, int, int] = (5, 26, 13)   # IN3, IN4, EN2
-    pwm_frequency: int = 30                              # Hz
+    pwm_frequency: int = 40                              # Hz

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-LD19 LIDAR Driver - Compatible with LidarInterface
+LD19 LIDAR Driver - FIXED COORDINATE SYSTEM
 Supports LD19, LD14, and similar UART-based 360° LIDARs
 """
 
@@ -40,6 +40,11 @@ class LD19Lidar(LidarInterface):
     """
     Driver for LD19/LD14 360° UART LIDAR
 
+    COORDINATE CONVENTION:
+    - LIDAR hardware: 0° is at a fixed position on the device
+    - Robot frame: 0° should point FORWARD (+Y direction)
+    - This driver applies correction to align LIDAR 0° with robot forward
+
     Packet Format:
     - Header: 0x54
     - Length: 0x2C (44 bytes payload)
@@ -76,7 +81,17 @@ class LD19Lidar(LidarInterface):
             self._latest_scan = None
             self._lock = threading.Lock()
 
+            # CRITICAL FIX: Correct angle offset based on diagnostic tests
+            # Latest test showed object in front at -23.3°
+            # So we need +23.3° correction to align with 0°
+            # Additional observation: When objects placed at front (-53.9°) and right (88.6°)
+            # The right is nearly correct (88.6° ≈ 90°) but front is off by ~54°
+            # This suggests we need approximately +23-24° base offset
+            self.angle_offset = np.radians(88.56)  # Align LIDAR 0° with robot front
+
             print(f"✓ LD19 LIDAR connected on {port} @ {baudrate} baud")
+            print(f"  Angle offset: {np.degrees(self.angle_offset):.1f}° "
+                  f"(aligns LIDAR frame with robot front)")
         except ImportError:
             raise ImportError("pyserial not installed. Run: pip install pyserial")
         except Exception as e:
@@ -187,9 +202,13 @@ class LD19Lidar(LidarInterface):
                         angles_deg = np.array([m[0] for m in scan_buffer])
                         ranges_m = np.array([m[1] for m in scan_buffer])
 
-                        # Convert angles to radians in robot frame [-pi, pi]
-                        # (0° = forward, counterclockwise positive)
-                        angles_rad = np.radians(angles_deg) + np.pi* 0.475
+                        # FIXED: Apply correct angle offset
+                        # Convert LIDAR hardware angles to robot frame
+                        # Robot frame: 0 = forward (+Y), increases CCW
+                        angles_rad = np.radians(angles_deg) + self.angle_offset
+
+                        # Normalize to [-π, π]
+                        angles_rad = np.arctan2(np.sin(angles_rad), np.cos(angles_rad))
 
                         with self._lock:
                             self._latest_scan = (ranges_m, angles_rad)
@@ -222,6 +241,7 @@ class LD19Lidar(LidarInterface):
             Tuple of (ranges, angles) where:
             - ranges: np.ndarray of distances in meters
             - angles: np.ndarray of angles in radians [-pi, pi]
+                     where 0 = robot forward direction (+Y)
 
         This matches the exact return format of RPLidarA1, YDLidarX2,
         and PlaceholderLidar for drop-in compatibility.
@@ -245,7 +265,6 @@ class LD19Lidar(LidarInterface):
         self.serial.close()
         print("LD19 LIDAR stopped")
 
-
     def draw(self, ax):
         """
         Draw LIDAR scan on matplotlib axis
@@ -256,9 +275,8 @@ class LD19Lidar(LidarInterface):
         """
         ranges, angles = self.get_scan()
 
-        # Convert to cartesian coordinates
-        x = ranges * np.sin(angles)
-        y = ranges * np.cos(angles)
-
+        # Convert to cartesian coordinates (robot frame convention)
+        x = ranges * np.sin(angles)  # Rightward
+        y = ranges * np.cos(angles)  # Forward
         # Draw scan points
         ax.scatter(x, y, c='red', s=1, alpha=0.5, label='LIDAR scan')

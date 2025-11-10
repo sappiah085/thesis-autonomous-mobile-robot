@@ -75,19 +75,12 @@ class AutonomousRobot:
                 self.goal[0], self.goal[1],
                 self.occupancy_grid, ranges
             )
-
             # Convert to wheel speeds (differential drive)
             left_speed, right_speed = self._velocities_to_wheels(v_cmd, w_cmd)
-
             # Send commands to motors
             self.motors.set_wheel_speeds(left_speed, right_speed)
-
-            # Wait for motion
-            time.sleep(self.cfg.dt)
-
             # Get new LIDAR scan
             ranges, angles = self.lidar.get_scan()
-
             # Estimate delta pose from scan matching
             delta_x, delta_y, delta_theta = self._estimate_delta_pose(
                 self.previous_ranges, self.previous_angles,

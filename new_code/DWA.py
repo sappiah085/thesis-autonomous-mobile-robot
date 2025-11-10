@@ -1,52 +1,53 @@
 # ============================================================================
 # DYNAMIC WINDOW APPROACH PLANNER WITH FUZZY LOGIC INTEGRATION
 # ============================================================================
+# Enhanced version with proper safety margins to prevent collisions
+#
+# Key Safety Improvements:
+# - Robot footprint consideration (circular approximation)
+# - Safety margin buffer around obstacles
+# - Minimum clearance threshold for trajectory rejection
+# - Conservative collision checking along entire trajectory
+#
 # Based on research from:
 # - "Local Path Planning for Mobile Robots Based on Fuzzy Dynamic Window Algorithm"
-#   (https://pmc.ncbi.nlm.nih.gov/articles/PMC10575201/)
 # - "Autonomous Robot Navigation Using Fuzzy Inference Based Dynamic Window Approach"
-#   (https://www.researchgate.net/publication/367068862_Autonomous_Robot_Navigation_Using_Fuzzy_Inference_Based_Dynamic_Window_Approach)
-#
-# These papers integrate fuzzy logic to dynamically adjust the weights (alpha, beta, gamma)
-# of the DWA evaluation function based on environmental factors like goal distance/orientation
-# and nearest obstacle distance.
-#
-# Adaptation:
-# - Use the provided FuzzyController's infer method (which uses min_obstacle_dist and goal_angle).
-# - Map the outputs: alpha = turn_factor, gamma = speed_factor, beta = 1 - speed_factor
-# - Normalize the weights to sum to 1 for relative importance.
-# - This approximates the fuzzy adjustment: high beta when close to obstacles (low speed_factor),
-#   high alpha when needing to align (high turn_factor), high gamma when clear (high speed_factor).
-#
-# Key Features:
-# - Samples velocities within dynamic constraints.
-# - Simulates trajectories and checks for collisions using occupancy grid.
-# - Evaluates trajectories with adaptive weights from fuzzy controller.
-# - Selects optimal admissible velocity command.
-#
-# Assumptions:
-# - FuzzyController.infer(min_obstacle_dist, goal_angle, velocity) returns dict with 'speed_factor', 'turn_factor'.
-# - Velocity input to infer is current v (though not used in provided implementation).
-# - RobotState provides current hardware position/orientation (odometry updated externally from hardware, not simulated here).
 
 import numpy as np
 import math
 from typing import Tuple
 
 class DWAPlanner:
-    """Dynamic Window Approach planner with fuzzy logic integration"""
+    """Dynamic Window Approach planner with fuzzy logic integration and safety margins"""
 
     def __init__(self, cfg, fuzzy):
         self.cfg = cfg
         self.fuzzy = fuzzy
-        print("✓ DWA Planner initialized with fuzzy integration")
+
+        # Safety parameters (should be added to cfg in practice)
+        # Robot radius - conservative estimate of robot's circular footprint
+        self.robot_radius = getattr(cfg, 'robot_radius', 1)  # meters
+
+        # Safety margin - additional buffer beyond robot radius
+        self.safety_margin = getattr(cfg, 'safety_margin', 0.4)  # meters
+
+        # Total clearance needed = robot radius + safety margin
+        self.min_clearance = self.robot_radius + self.safety_margin
+
+        # Number of points to check along trajectory for more thorough collision detection
+        self.collision_check_resolution = getattr(cfg, 'collision_check_resolution', 0.05)  # meters
+
+        print(f"✓ DWA Planner initialized with fuzzy integration")
+        print(f"  - Robot radius: {self.robot_radius:.2f}m")
+        print(f"  - Safety margin: {self.safety_margin:.2f}m")
+        print(f"  - Minimum clearance: {self.min_clearance:.2f}m")
 
     def plan(self, x: float, y: float, theta: float,
              cur_v: float, cur_w: float,
              goal_x: float, goal_y: float,
              occupancy_grid, ranges: np.ndarray) -> Tuple[float, float]:
         """
-        Plan linear and angular velocity commands.
+        Plan linear and angular velocity commands with safety considerations.
 
         Parameters follow the commented signature in AutonomousRobot.
         Uses occupancy grid for collision checking and lidar ranges for min_obs.
@@ -93,13 +94,14 @@ class DWAPlanner:
                 # Simulate trajectory
                 traj = self._simulate_trajectory(x, y, theta, v, w)
 
-                # Check if admissible (collision-free)
-                if not self._is_admissible(traj, occupancy_grid):
+                # Check if admissible (collision-free with safety margins)
+                is_safe, min_traj_clearance = self._is_admissible(traj, occupancy_grid)
+                if not is_safe:
                     continue
 
                 # Compute evaluation scores
                 heading = self._eval_heading(traj, goal_x, goal_y)
-                clearance = self._eval_clearance(traj, occupancy_grid)
+                clearance = self._eval_clearance(min_traj_clearance)
                 velocity = self._eval_velocity(v)
 
                 # Compute score with adaptive fuzzy weights
@@ -142,12 +144,42 @@ class DWAPlanner:
             traj_theta = theta + w * t
         return np.column_stack((traj_x, traj_y, traj_theta))
 
-    def _is_admissible(self, traj: np.ndarray, occupancy_grid) -> bool:
-        """Check if trajectory collides with occupied cells"""
-        for point in traj[:, :2]:
-            if occupancy_grid.is_occupied(point[0], point[1]):
-                return False
-        return True
+    def _is_admissible(self, traj: np.ndarray, occupancy_grid) -> Tuple[bool, float]:
+        """
+        Check if trajectory is collision-free with safety margins.
+
+        Returns: (is_safe, min_clearance)
+            is_safe: True if trajectory maintains minimum clearance from all obstacles
+            min_clearance: Minimum distance to obstacles along the trajectory
+        """
+        min_clearance = np.inf
+
+        # Check each point along trajectory
+        for i in range(len(traj) - 1):
+            # Get current and next point
+            p1 = traj[i, :2]
+            p2 = traj[i + 1, :2]
+
+            # Calculate segment length
+            segment_length = np.linalg.norm(p2 - p1)
+
+            # Number of intermediate points to check
+            num_checks = max(2, int(segment_length / self.collision_check_resolution))
+
+            # Check points along the segment
+            for j in range(num_checks):
+                t = j / (num_checks - 1) if num_checks > 1 else 0
+                check_point = p1 + t * (p2 - p1)
+
+                # Get distance to nearest obstacle
+                dist = occupancy_grid.get_min_dist_to_obstacle(check_point[0], check_point[1])
+                min_clearance = min(min_clearance, dist)
+
+                # Immediate rejection if too close to obstacle
+                if dist < self.min_clearance:
+                    return False, dist
+
+        return True, min_clearance
 
     def _eval_heading(self, traj: np.ndarray, goal_x: float, goal_y: float) -> float:
         """Evaluate alignment to goal (normalized 0-1)"""
@@ -156,13 +188,21 @@ class DWAPlanner:
         delta = abs((goal_angle - final_theta + math.pi) % (2 * math.pi) - math.pi)
         return 1.0 - (delta / math.pi)  # 1 if aligned, 0 if opposite
 
-    def _eval_clearance(self, traj: np.ndarray, occupancy_grid) -> float:
-        """Evaluate min distance to obstacles along trajectory (normalized)"""
-        min_dist = np.inf
-        for point in traj[:, :2]:
-            dist = occupancy_grid.get_min_dist_to_obstacle(point[0], point[1])
-            min_dist = min(min_dist, dist)
-        return min(min_dist / self.cfg.max_lidar_range, 1.0)
+    def _eval_clearance(self, min_clearance: float) -> float:
+        """
+        Evaluate obstacle clearance (normalized 0-1).
+
+        Uses the minimum clearance found during admissibility check.
+        Rewards trajectories that maintain good distance from obstacles.
+        """
+        # Normalize clearance score
+        # Full score if clearance >= max sensor range
+        # Score increases non-linearly with clearance for better safety
+        normalized = min(min_clearance / self.cfg.max_lidar_range, 1.0)
+
+        # Apply non-linear scaling to further reward safer trajectories
+        # This makes the planner prefer paths with more clearance
+        return normalized ** 0.5  # Square root gives more weight to additional clearance
 
     def _eval_velocity(self, v: float) -> float:
         """Evaluate forward progress (normalized)"""

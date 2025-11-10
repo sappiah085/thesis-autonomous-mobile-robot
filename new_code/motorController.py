@@ -63,8 +63,8 @@ class MotorController:
 
         left_pwm = abs(left_speed) * self.cfg.pwm_frequency
         right_pwm = abs(right_speed) * self.cfg.pwm_frequency
-        self.set_motor(self.cfg.motor_left_pins, left_dir, left_pwm)
-        self.set_motor(self.cfg.motor_right_pins, right_dir, right_pwm)
+        self.set_motor(self.cfg.motor_left_pins, left_dir,min,(20, max(15,left_pwm)))
+        self.set_motor(self.cfg.motor_right_pins, right_dir, min(20, max(15,right_pwm)))
         time.sleep(0.5)
         self.stop()
     def clamp_speed(self,speed):
@@ -94,5 +94,5 @@ class MotorController:
         self.set_motor(self.cfg.motor_left_pins, left_dir, 60 if left_dir == 1 else 90)
         self.set_motor(self.cfg.motor_right_pins, right_dir, 60 if right_dir == 1 else 90)
 
-        time.sleep(0.3)  # Extra buffer as in your example
+        time.sleep(time_delay*0.5+0.1)  # Extra buffer as in your example
         self.stop()  # Stop after turn

@@ -46,7 +46,7 @@ class MotorController:
       right_dir = -1 if speed < 0 else 1
       self.set_motor(self.cfg.motor_left_pins, left_dir, speed)
       self.set_motor(self.cfg.motor_right_pins, right_dir, speed)
-      time.sleep(0.3)
+      time.sleep(0.2)
 
     def set_wheel_speeds(self, left_speed: float, right_speed: float):
 
@@ -63,8 +63,8 @@ class MotorController:
 
         left_pwm = abs(left_speed) * self.cfg.pwm_frequency
         right_pwm = abs(right_speed) * self.cfg.pwm_frequency
-        self.set_motor(self.cfg.motor_left_pins, left_dir, left_pwm)
-        self.set_motor(self.cfg.motor_right_pins, right_dir, right_pwm)
+        self.set_motor(self.cfg.motor_left_pins, left_dir, (30, max(20,left_pwm)))
+        self.set_motor(self.cfg.motor_right_pins, right_dir, (30, max(20,right_pwm)))
         time.sleep(0.5)
         self.stop()
     def clamp_speed(self,speed):
@@ -86,13 +86,12 @@ class MotorController:
         """Perform in-place turn using open-loop timing (for non-proportional motors)"""
         angle = max(-90, min(90, angle))  # Limit as in your example
         time_delay = math.fabs(angle) / 30  # Assumes ~30 deg/s turn rate; calibrate this!
-        left_dir = -1 if angle < 0 else 1
-        right_dir = 1 if angle < 0 else -1
+        left_dir = 1 if angle < 0 else -1
+        right_dir = -1 if angle < 0 else 1
 
         # Use your set_motor logic (adapt to your MotorController API)
         # Assuming MotorController has a method like set_motor(pins, direction, pwm)
         self.set_motor(self.cfg.motor_left_pins, left_dir, 60 if left_dir == 1 else 90)
         self.set_motor(self.cfg.motor_right_pins, right_dir, 60 if right_dir == 1 else 90)
-
-        time.sleep(0.3)  # Extra buffer as in your example
+        time.sleep(time_delay+0.1)  # Extra buffer as in your example
         self.stop()  # Stop after turn

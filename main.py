@@ -6,6 +6,7 @@ Compatible with LD19 LIDAR (uses scan matching for odometry)
 from robot.lidar import LD19Lidar
 from robot.autonomousRobot import AutonomousRobot
 from robot.config import RobotConfig
+import math
 # ============================================================================
 # EXAMPLE USAGE
 # ============================================================================
